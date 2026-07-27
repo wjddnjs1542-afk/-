@@ -34,9 +34,23 @@ function migrate(raw){
  return s;
 }
 let state=migrate(JSON.parse(localStorage.getItem('tripflow_state')||'null'));
-let activeDay=0,map,directionsService,autocomplete,markers=[],routeRenderers=[],routeLines=[],locationMarker,accuracyCircle,currentMode='DRIVING';
+const savedUI=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
+let activeDay=Number.isInteger(savedUI.activeDay)?savedUI.activeDay:0,
+map,directionsService,autocomplete,markers=[],routeRenderers=[],routeLines=[],
+locationMarker,accuracyCircle,currentMode=savedUI.currentMode||'DRIVING';
+let currentView=savedUI.currentView||'map';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const save=()=>localStorage.setItem('tripflow_state',JSON.stringify(state));
+function saveUI(extra={}){
+ const prev=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
+ localStorage.setItem('tripflow_ui_state',JSON.stringify({...prev,activeDay,currentMode,currentView,...extra}));
+}
+function applyRestoredUI(){
+ if(activeDay<0||activeDay>=state.days.length)activeDay=0;
+ $$('.mode-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.mode===currentMode));
+ $$('.mobile-nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
+ $('.workspace').classList.toggle('plan-view',currentView==='plan');
+}
 function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function stripHtml(s){const d=document.createElement('div');d.innerHTML=s;return d.textContent||d.innerText||''}
@@ -77,7 +91,7 @@ function render(){
  $('#stopList').innerHTML=d.stops.map((s,i)=>{
   let status=''; if(i>0&&s.time){const p=d.stops[i-1],arr=(minutes(p.time)??0)+(p.duration||0)+estimateMinutes(p,s);const diff=arr-minutes(s.time);if(p.time)status=`<div class="arrival-status ${diff>5?'late':'safe'}">${diff>5?`예상 ${Math.round(diff)}분 지각 가능`:'시간 내 이동 가능'}</div>`}
   return`<div class="stop" draggable="true" data-index="${i}"><div class="stop-index">${i+1}</div><div class="stop-main"><div class="stop-title">${s.time?`<span class="stop-time">${esc(s.time)}</span>`:''}${esc(s.name)}</div><div class="stop-meta">${esc(s.type||'장소')} · 체류 ${s.duration||0}분</div>${status}</div><div class="stop-actions"><button data-action="edit" data-index="${i}">✎</button><button data-action="locate" data-index="${i}">⌖</button><button data-action="delete" data-index="${i}">✕</button></div></div>`}).join('');
- $$('#dayTabs button').forEach(b=>b.onclick=()=>{activeDay=+b.dataset.day;clearRoutes();render();fitMap()});
+ $$('#dayTabs button').forEach(b=>b.onclick=()=>{activeDay=+b.dataset.day;saveUI();clearRoutes();render();fitMap()});
  bindStops();straightMetrics();refreshMarkers();
 }
 function bindStops(){
@@ -110,8 +124,33 @@ function addPlace(){
  state.days[activeDay].stops.push(base);input.value='';$('#placeTime').value='';save();clearRoutes();render();toast('시간과 함께 일정에 추가했습니다.');
 }
 function straightMetrics(){const s=state.days[activeDay].stops;let km=0;for(let i=1;i<s.length;i++)if(s[i-1].lat&&s[i].lat)km+=hav(s[i-1],s[i]);$('#distanceMetric').textContent=km?`약 ${km.toFixed(1)} km`:'—';$('#durationMetric').textContent='—'}
-function initGoogle(){const key=localStorage.getItem('tripflow_google_key');if(!key)return;const s=document.createElement('script');s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=setupMap&v=weekly&language=ko`;s.async=true;s.defer=true;s.onerror=()=>toast('Google Maps를 불러오지 못했습니다.');document.head.appendChild(s)}
-window.setupMap=()=>{map=new google.maps.Map($('#map'),{center:{lat:34.3428,lng:134.0466},zoom:13,mapTypeId:'roadmap',gestureHandling:'greedy',fullscreenControl:false,streetViewControl:false,mapTypeControl:false});directionsService=new google.maps.DirectionsService();autocomplete=new google.maps.places.Autocomplete($('#placeSearch'),{fields:['place_id','geometry','name','formatted_address'],componentRestrictions:{country:'jp'}});refreshMarkers();fitMap()};
+function configuredGoogleKey(){
+ const bundled=window.TRIPFLOW_CONFIG?.GOOGLE_MAPS_API_KEY?.trim();
+ if(bundled&&bundled!=='여기에_구글맵_API키를_입력하세요')return bundled;
+ return localStorage.getItem('tripflow_google_key')||'';
+}
+function initGoogle(){
+ const key=configuredGoogleKey();
+ if(!key)return;
+ const s=document.createElement('script');
+ s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=setupMap&v=weekly&language=ko`;
+ s.async=true;s.defer=true;s.onerror=()=>toast('Google Maps를 불러오지 못했습니다.');
+ document.head.appendChild(s);
+}
+window.setupMap=()=>{
+ const ui=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
+ const center=ui.mapCenter&&Number.isFinite(ui.mapCenter.lat)&&Number.isFinite(ui.mapCenter.lng)?ui.mapCenter:{lat:34.3428,lng:134.0466};
+ map=new google.maps.Map($('#map'),{center,zoom:Number.isFinite(ui.mapZoom)?ui.mapZoom:13,mapTypeId:ui.mapType||'roadmap',gestureHandling:'greedy',fullscreenControl:false,streetViewControl:false,mapTypeControl:false});
+ directionsService=new google.maps.DirectionsService();
+ autocomplete=new google.maps.places.Autocomplete($('#placeSearch'),{fields:['place_id','geometry','name','formatted_address'],componentRestrictions:{country:'jp'}});
+ refreshMarkers();
+ $$('.map-controls button').forEach(b=>b.classList.toggle('active',b.dataset.maptype===map.getMapTypeId()));
+ map.addListener('idle',()=>{
+   const c=map.getCenter();
+   saveUI({mapCenter:{lat:c.lat(),lng:c.lng()},mapZoom:map.getZoom(),mapType:map.getMapTypeId()});
+ });
+ if(!ui.mapCenter)fitMap();
+};
 function refreshMarkers(){if(!map||!window.google)return;markers.forEach(m=>m.setMap(null));markers=[];state.days[activeDay].stops.forEach((s,i)=>{if(s.lat)markers.push(new google.maps.Marker({map,position:{lat:s.lat,lng:s.lng},label:{text:String(i+1),color:'#fff',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:'#ff3b5c',fillOpacity:1,strokeColor:'#fff',strokeWeight:3},title:`${s.time||''} ${s.name}`,zIndex:20+i}))})}
 function fitMap(){if(!map||!window.google)return;const b=new google.maps.LatLngBounds();let n=0;state.days[activeDay].stops.forEach(s=>{if(s.lat){b.extend({lat:s.lat,lng:s.lng});n++}});if(n)map.fitBounds(b,55)}
 function clearRoutes(){routeRenderers.forEach(r=>r.setMap(null));routeLines.forEach(r=>r.setMap(null));routeRenderers=[];routeLines=[];$('#directionsPanel').innerHTML='<div class="directions-empty">경로를 표시하면 구간별 이동방법이 나타납니다.</div>'}
@@ -145,7 +184,7 @@ function locateMe(){if(!map)return toast('먼저 Google Maps를 연결해 주세
 function openGoogle(){const s=state.days[activeDay].stops;if(s.length<2)return;const modes={DRIVING:'driving',WALKING:'walking',TRANSIT:'transit'},way=currentMode==='TRANSIT'?'':`&waypoints=${encodeURIComponent(s.slice(1,-1).map(x=>x.name).join('|'))}`;window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(s[0].name)}&destination=${encodeURIComponent(s.at(-1).name)}${way}&travelmode=${modes[currentMode]}`,'_blank')}
 function fillFlight(prefix,f){$(`#${prefix}Airline`).value=f?.airline||'';$(`#${prefix}FlightNo`).value=f?.flightNo||'';$(`#${prefix}Aircraft`).value=f?.aircraft||'';$(`#${prefix}DepAirport`).value=f?.depAirport||'';$(`#${prefix}ArrAirport`).value=f?.arrAirport||'';$(`#${prefix}DepTime`).value=f?.depTime||'';$(`#${prefix}ArrTime`).value=f?.arrTime||''}
 function readFlight(prefix){return{airline:$(`#${prefix}Airline`).value,flightNo:$(`#${prefix}FlightNo`).value,aircraft:$(`#${prefix}Aircraft`).value,depAirport:$(`#${prefix}DepAirport`).value,arrAirport:$(`#${prefix}ArrAirport`).value,depTime:$(`#${prefix}DepTime`).value,arrTime:$(`#${prefix}ArrTime`).value}}
-$('#apiBtn').onclick=()=>{$('#apiKeyInput').value=localStorage.getItem('tripflow_google_key')||'';$('#apiDialog').showModal()};
+$('#apiBtn').onclick=()=>{$('#apiKeyInput').value=configuredGoogleKey();$('#apiDialog').showModal()};
 $('#saveApiBtn').onclick=e=>{e.preventDefault();const k=$('#apiKeyInput').value.trim();if(!k)return toast('API 키를 입력해 주세요.');localStorage.setItem('tripflow_google_key',k);location.reload()};
 $('#editTripBtn').onclick=()=>{const t=state.trip;$('#tripNameInput').value=t.name||'';$('#startDateInput').value=t.start||'';$('#endDateInput').value=t.end||'';$('#hotelInput').value=t.hotel||'';fillFlight('out',t.outbound);fillFlight('in',t.inbound);$('#tripDialog').showModal()};
 $('#saveTripBtn').onclick=e=>{e.preventDefault();state.trip={name:$('#tripNameInput').value,start:$('#startDateInput').value,end:$('#endDateInput').value,hotel:$('#hotelInput').value,outbound:readFlight('out'),inbound:readFlight('in')};save();$('#tripDialog').close();render();toast('여행과 항공편 정보를 저장했습니다.')};
@@ -153,7 +192,7 @@ $('#saveStopBtn').onclick=e=>{e.preventDefault();const i=Number($('#stopIndexInp
 $('#addPlaceBtn').onclick=addPlace;$('#placeSearch').onkeydown=e=>{if(e.key==='Enter')addPlace()};$('#addEmptyBtn').onclick=()=>$('#placeSearch').focus();
 $$('.quick-tags button').forEach(b=>b.onclick=()=>{$('#placeSearch').value=`다카마쓰 ${b.dataset.query}`;$('#placeSearch').focus()});
 $('#optimizeBtn').onclick=optimize;$('#mobileOptimize').onclick=optimize;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;
-$$('.mode-tabs button').forEach(b=>b.onclick=()=>{currentMode=b.dataset.mode;$$('.mode-tabs button').forEach(x=>x.classList.toggle('active',x===b));clearRoutes();straightMetrics();render()});
-$$('.map-controls button').forEach(b=>b.onclick=()=>{if(map)map.setMapTypeId(b.dataset.maptype);$$('.map-controls button').forEach(x=>x.classList.toggle('active',x===b))});
-$$('.mobile-nav [data-view]').forEach(b=>b.onclick=()=>{$$('.mobile-nav [data-view]').forEach(x=>x.classList.toggle('active',x===b));$('.workspace').classList.toggle('plan-view',b.dataset.view==='plan')});
-render();initGoogle();
+$$('.mode-tabs button').forEach(b=>b.onclick=()=>{currentMode=b.dataset.mode;saveUI();$$('.mode-tabs button').forEach(x=>x.classList.toggle('active',x===b));clearRoutes();straightMetrics();render()});
+$$('.map-controls button').forEach(b=>b.onclick=()=>{if(map){map.setMapTypeId(b.dataset.maptype);saveUI({mapType:b.dataset.maptype})}$$('.map-controls button').forEach(x=>x.classList.toggle('active',x===b))});
+$$('.mobile-nav [data-view]').forEach(b=>b.onclick=()=>{$$('.mobile-nav [data-view]').forEach(x=>x.classList.toggle('active',x===b));currentView=b.dataset.view;saveUI();$('.workspace').classList.toggle('plan-view',currentView==='plan')});
+applyRestoredUI();render();initGoogle();
