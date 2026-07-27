@@ -2,3 +2,18 @@
 
 /* Phase 1.2 additions */
 :root{--route:#ff3b5c}.location-btn{position:absolute;right:14px;bottom:18px;z-index:6;border:0;background:#fff;color:var(--text);border-radius:999px;padding:10px 14px;box-shadow:var(--shadow);display:flex;gap:7px;align-items:center}.location-btn span{font-size:20px;color:var(--accent)}.location-btn.loading{opacity:.65}.mode-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0}.mode-tabs button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 5px;font-size:11px;font-weight:700}.mode-tabs button.active{background:#fff0f3;color:var(--route);border-color:#ff9aac}.directions-panel{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.directions-empty{font-size:11px;color:var(--muted);padding:10px;background:#f8fafc;border-radius:10px}.leg-card{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}.leg-head{background:#f8fafc;padding:10px 11px;display:flex;justify-content:space-between;gap:8px}.leg-head b{font-size:12px}.leg-head span{font-size:11px;color:var(--muted);white-space:nowrap}.step-list{padding:4px 10px}.step{display:grid;grid-template-columns:24px 1fr auto;gap:7px;padding:8px 0;border-bottom:1px solid #f0f1f3;font-size:11px;line-height:1.45}.step:last-child{border-bottom:0}.step-icon{font-size:15px}.step-distance{color:var(--muted);white-space:nowrap}.transit-line{display:inline-block;border-radius:5px;background:#e5e7eb;padding:1px 5px;margin:0 2px;font-weight:700}.stop-index{background:#fff0f3!important;color:var(--route)!important;border:2px solid var(--route)}@media(max-width:700px){.location-btn{right:10px;bottom:12px}.location-btn b{display:none}.mode-tabs{grid-template-columns:1fr 1fr}}
+
+.flight-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.flight-row{display:grid;grid-template-columns:38px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.flight-row:last-child{border-bottom:0}.flight-icon{font-size:23px}.flight-main b,.flight-main span{display:block}
+.flight-main b{font-size:13px}.flight-main span{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+.place-time-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.place-time-row label{font-size:10px;color:var(--muted)}
+.place-time-row input{width:100%;margin-top:4px;border:1px solid var(--line);border-radius:9px;padding:9px}
+.stop-time{display:inline-block;background:#fff0f3;color:var(--route);border-radius:999px;padding:2px 7px;font-weight:800;margin-right:5px}
+.stop-actions{display:flex}.stop-actions button{font-size:15px}
+.schedule-alert{padding:9px 10px;border-radius:10px;font-size:11px;line-height:1.45;margin:0 0 8px}
+.schedule-alert.warn{background:#fff7ed;color:#9a3412}.schedule-alert.ok{background:#ecfdf5;color:#047857}
+.form-section-title{font-size:14px;margin:18px 0 2px;padding-top:12px;border-top:1px solid var(--line)}
+.flight-dialog{max-height:86vh;overflow:auto}
+.arrival-status{font-size:10px;margin-top:3px}.arrival-status.late{color:#dc2626}.arrival-status.safe{color:#059669}
+@media(max-width:700px){.flight-card{border-radius:14px}.place-time-row{grid-template-columns:1fr 1fr}.flight-dialog{max-height:82vh}}
