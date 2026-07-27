@@ -26,3 +26,9 @@ API 키에는 웹사이트(HTTP referrer) 제한을 적용하세요. 정식 서�
 
 ## Netlify
 압축을 푼 폴더를 Netlify Drop에 올리면 됩니다. Google API 키의 허용 도메인에 발급받은 Netlify 주소를 등록하세요.
+
+
+## 2026-07 모바일 조작성 개선
+- 지도 한 손가락 드래그 이동 지원
+- 두 손가락 핀치 확대/축소 지원
+- Google Maps gestureHandling: greedy 적용
