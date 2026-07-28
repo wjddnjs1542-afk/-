@@ -40,7 +40,15 @@
   <button class="location-btn" id="locationBtn" title="내 현위치"><span>◎</span><b>내 위치</b></button>
 </section>
 
-<aside class="planner-pane"><div class="panel-scroll">
+<aside class="planner-pane" id="plannerSheet">
+  <div class="sheet-grabber" id="sheetHandle" role="button" tabindex="0" aria-label="일정 패널 높이 조절">
+    <div class="grabber-bar"></div>
+    <div class="sheet-peek-row">
+      <div><b id="sheetDayTitle">오늘 일정</b><span id="sheetHint">위로 밀어 일정 보기</span></div>
+      <button class="sheet-expand-btn" id="sheetToggleBtn" type="button" aria-label="일정 패널 펼치기">⌃</button>
+    </div>
+  </div>
+  <div class="panel-scroll" id="panelScroll">
 <section class="trip-card">
   <div class="section-head">
     <div><h2 id="tripTitle"></h2><p id="tripDates"></p></div>
@@ -101,12 +109,6 @@
 </section>
 </div></aside>
 </main>
-
-<nav class="mobile-nav">
-<button class="active" data-view="map">🗺️<span>지도</span></button>
-<button data-view="plan">🗓️<span>일정</span></button>
-<button id="mobileOptimize">✨<span>동선</span></button>
-</nav>
 </div>
 
 <dialog id="apiDialog"><form method="dialog" class="dialog-card">

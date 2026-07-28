@@ -39,17 +39,17 @@ let activeDay=Number.isInteger(savedUI.activeDay)?savedUI.activeDay:0,
 map,directionsService,autocomplete,markers=[],routeRenderers=[],routeLines=[],
 locationMarker,accuracyCircle,currentMode=savedUI.currentMode||'DRIVING';
 let currentView=savedUI.currentView||'map';
+let sheetSnap=savedUI.sheetSnap||'collapsed';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const save=()=>localStorage.setItem('tripflow_state',JSON.stringify(state));
 function saveUI(extra={}){
  const prev=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
- localStorage.setItem('tripflow_ui_state',JSON.stringify({...prev,activeDay,currentMode,currentView,...extra}));
+ localStorage.setItem('tripflow_ui_state',JSON.stringify({...prev,activeDay,currentMode,currentView,sheetSnap,...extra}));
 }
 function applyRestoredUI(){
  if(activeDay<0||activeDay>=state.days.length)activeDay=0;
  $$('.mode-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.mode===currentMode));
- $$('.mobile-nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
- $('.workspace').classList.toggle('plan-view',currentView==='plan');
+ if($('#plannerSheet')) $('#plannerSheet').dataset.snap=sheetSnap;
 }
 function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -86,6 +86,8 @@ function render(){
  updateHeader();
  $('#dayTabs').innerHTML=state.days.map((d,i)=>`<button class="${i===activeDay?'active':''}" data-day="${i}">${d.label}<br><small>${d.date}</small></button>`).join('');
  const d=state.days[activeDay],check=scheduleCheck(d.stops);
+ if($('#sheetDayTitle')) $('#sheetDayTitle').textContent=`${d.label} · ${d.date} · ${d.stops.length}개 일정`;
+ updateSheetHint();
  $('#daySummary').textContent=`${d.stops.length}개 장소 · 체류 약 ${Math.round(d.stops.reduce((a,s)=>a+(s.duration||0),0)/6)/10}시간`;
  $('#scheduleAlerts').innerHTML=check.late?`<div class="schedule-alert warn">⚠️ 현재 순서에서는 ${check.late}개 장소에 늦을 가능성이 있습니다.<br>${check.alerts.map(esc).join('<br>')}</div>`:`<div class="schedule-alert ok">✓ 입력된 희망시간 기준으로 큰 시간 충돌이 발견되지 않았습니다.</div>`;
  $('#stopList').innerHTML=d.stops.map((s,i)=>{
@@ -98,6 +100,7 @@ function bindStops(){
  $$('#stopList [data-action=delete]').forEach(b=>b.onclick=()=>{state.days[activeDay].stops.splice(+b.dataset.index,1);save();clearRoutes();render()});
  $$('#stopList [data-action=locate]').forEach(b=>b.onclick=()=>{const s=state.days[activeDay].stops[+b.dataset.index];if(map&&s.lat){map.panTo({lat:s.lat,lng:s.lng});map.setZoom(16)}});
  $$('#stopList [data-action=edit]').forEach(b=>b.onclick=()=>openStop(+b.dataset.index));
+ $$('#stopList .stop').forEach(el=>el.onclick=e=>{if(e.target.closest('[data-action]'))return;const s=state.days[activeDay].stops[+el.dataset.index];if(map&&s.lat){map.panTo({lat:s.lat,lng:s.lng});map.setZoom(16);setSheetSnap('half');toast(`${s.name} 위치를 지도에 표시했습니다.`)}});
  let from=null;$$('#stopList .stop').forEach(el=>{el.ondragstart=()=>{from=+el.dataset.index;el.classList.add('dragging')};el.ondragend=()=>el.classList.remove('dragging');el.ondragover=e=>e.preventDefault();el.ondrop=e=>{e.preventDefault();const to=+el.dataset.index;if(from===null||from===to)return;const a=state.days[activeDay].stops;a.splice(to,0,a.splice(from,1)[0]);save();clearRoutes();render()}})
 }
 function openStop(i){const s=state.days[activeDay].stops[i];$('#stopIndexInput').value=i;$('#stopNameInput').value=s.name;$('#stopTypeInput').value=s.type||'';$('#stopTimeInput').value=s.time||'';$('#stopDurationInput').value=s.duration??60;$('#stopDialog').showModal()}
@@ -184,6 +187,42 @@ function locateMe(){if(!map)return toast('먼저 Google Maps를 연결해 주세
 function openGoogle(){const s=state.days[activeDay].stops;if(s.length<2)return;const modes={DRIVING:'driving',WALKING:'walking',TRANSIT:'transit'},way=currentMode==='TRANSIT'?'':`&waypoints=${encodeURIComponent(s.slice(1,-1).map(x=>x.name).join('|'))}`;window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(s[0].name)}&destination=${encodeURIComponent(s.at(-1).name)}${way}&travelmode=${modes[currentMode]}`,'_blank')}
 function fillFlight(prefix,f){$(`#${prefix}Airline`).value=f?.airline||'';$(`#${prefix}FlightNo`).value=f?.flightNo||'';$(`#${prefix}Aircraft`).value=f?.aircraft||'';$(`#${prefix}DepAirport`).value=f?.depAirport||'';$(`#${prefix}ArrAirport`).value=f?.arrAirport||'';$(`#${prefix}DepTime`).value=f?.depTime||'';$(`#${prefix}ArrTime`).value=f?.arrTime||''}
 function readFlight(prefix){return{airline:$(`#${prefix}Airline`).value,flightNo:$(`#${prefix}FlightNo`).value,aircraft:$(`#${prefix}Aircraft`).value,depAirport:$(`#${prefix}DepAirport`).value,arrAirport:$(`#${prefix}ArrAirport`).value,depTime:$(`#${prefix}DepTime`).value,arrTime:$(`#${prefix}ArrTime`).value}}
+
+function updateSheetHint(){
+ const hint=$('#sheetHint'),toggle=$('#sheetToggleBtn');if(!hint||!toggle)return;
+ const text={collapsed:'위로 밀어 지도와 일정을 함께 보기',half:'위로 밀어 일정 전체 보기 · 아래로 밀어 지도 보기',full:'아래로 밀어 지도와 함께 보기'};
+ hint.textContent=text[sheetSnap]||text.collapsed;
+ toggle.textContent=sheetSnap==='full'?'⌄':'⌃';
+}
+function setSheetSnap(next,animate=true){
+ if(!matchMedia('(max-width:700px)').matches)return;
+ const sheet=$('#plannerSheet'),scroll=$('#panelScroll');if(!sheet)return;
+ sheetSnap=next;sheet.dataset.snap=next;sheet.classList.toggle('dragging',!animate);
+ if(next!=='full'&&scroll)scroll.scrollTop=0;
+ saveUI();updateSheetHint();
+ setTimeout(()=>{if(map&&window.google)google.maps.event.trigger(map,'resize')},300);
+}
+function initBottomSheet(){
+ const sheet=$('#plannerSheet'),handle=$('#sheetHandle'),scroll=$('#panelScroll'),toggle=$('#sheetToggleBtn');
+ if(!sheet||!handle)return;
+ sheet.dataset.snap=sheetSnap;
+ const snaps=()=>({full:0,half:Math.round(sheet.clientHeight*.44),collapsed:sheet.clientHeight-78});
+ const yFor=()=>snaps()[sheetSnap]??snaps().collapsed;
+ let dragging=false,startY=0,startOffset=0,lastY=0,lastT=0,velocity=0;
+ const begin=(y)=>{if(!matchMedia('(max-width:700px)').matches)return;dragging=true;startY=lastY=y;startOffset=yFor();lastT=performance.now();velocity=0;sheet.classList.add('dragging')};
+ const move=(y)=>{if(!dragging)return;const now=performance.now(),dt=Math.max(1,now-lastT);velocity=(y-lastY)/dt;lastY=y;lastT=now;const sp=snaps(),v=Math.max(sp.full,Math.min(sp.collapsed,startOffset+(y-startY)));sheet.style.transform=`translateY(${v}px)`};
+ const end=()=>{if(!dragging)return;dragging=false;const matrix=getComputedStyle(sheet).transform;let current=yFor();if(matrix&&matrix!=='none'){const m=new DOMMatrixReadOnly(matrix);current=m.m42}sheet.style.transform='';sheet.classList.remove('dragging');const sp=snaps();let next;if(velocity<-.45)next=current<sp.half?'full':'half';else if(velocity>.45)next=current>sp.half?'collapsed':'half';else next=Object.entries(sp).sort((a,b)=>Math.abs(a[1]-current)-Math.abs(b[1]-current))[0][0];setSheetSnap(next)};
+ handle.addEventListener('pointerdown',e=>{begin(e.clientY);handle.setPointerCapture(e.pointerId)});
+ handle.addEventListener('pointermove',e=>move(e.clientY));handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
+ toggle?.addEventListener('click',e=>{e.stopPropagation();setSheetSnap(sheetSnap==='collapsed'?'half':sheetSnap==='half'?'full':'half')});
+ handle.addEventListener('dblclick',()=>setSheetSnap(sheetSnap==='full'?'collapsed':'full'));
+ let touchStartY=0,panelDrag=false;
+ scroll?.addEventListener('touchstart',e=>{touchStartY=e.touches[0].clientY;panelDrag=false},{passive:true});
+ scroll?.addEventListener('touchmove',e=>{const y=e.touches[0].clientY,dy=y-touchStartY;if(sheetSnap!=='full'||(scroll.scrollTop<=0&&dy>8)){if(!panelDrag){panelDrag=true;begin(touchStartY)}move(y);e.preventDefault()}},{passive:false});
+ scroll?.addEventListener('touchend',()=>{if(panelDrag)end()},{passive:true});
+ window.addEventListener('resize',()=>{sheet.style.transform='';sheet.dataset.snap=sheetSnap});
+ updateSheetHint();
+}
 $('#apiBtn').onclick=()=>{$('#apiKeyInput').value=configuredGoogleKey();$('#apiDialog').showModal()};
 $('#saveApiBtn').onclick=e=>{e.preventDefault();const k=$('#apiKeyInput').value.trim();if(!k)return toast('API 키를 입력해 주세요.');localStorage.setItem('tripflow_google_key',k);location.reload()};
 $('#editTripBtn').onclick=()=>{const t=state.trip;$('#tripNameInput').value=t.name||'';$('#startDateInput').value=t.start||'';$('#endDateInput').value=t.end||'';$('#hotelInput').value=t.hotel||'';fillFlight('out',t.outbound);fillFlight('in',t.inbound);$('#tripDialog').showModal()};
@@ -191,8 +230,8 @@ $('#saveTripBtn').onclick=e=>{e.preventDefault();state.trip={name:$('#tripNameIn
 $('#saveStopBtn').onclick=e=>{e.preventDefault();const i=Number($('#stopIndexInput').value),s=state.days[activeDay].stops[i];Object.assign(s,{name:$('#stopNameInput').value,type:$('#stopTypeInput').value,time:$('#stopTimeInput').value,duration:Number($('#stopDurationInput').value)||0});save();$('#stopDialog').close();clearRoutes();render();toast('장소 시간을 수정했습니다.')};
 $('#addPlaceBtn').onclick=addPlace;$('#placeSearch').onkeydown=e=>{if(e.key==='Enter')addPlace()};$('#addEmptyBtn').onclick=()=>$('#placeSearch').focus();
 $$('.quick-tags button').forEach(b=>b.onclick=()=>{$('#placeSearch').value=`다카마쓰 ${b.dataset.query}`;$('#placeSearch').focus()});
-$('#optimizeBtn').onclick=optimize;$('#mobileOptimize').onclick=optimize;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;
+$('#optimizeBtn').onclick=optimize;if($('#mobileOptimize'))$('#mobileOptimize').onclick=optimize;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;
 $$('.mode-tabs button').forEach(b=>b.onclick=()=>{currentMode=b.dataset.mode;saveUI();$$('.mode-tabs button').forEach(x=>x.classList.toggle('active',x===b));clearRoutes();straightMetrics();render()});
 $$('.map-controls button').forEach(b=>b.onclick=()=>{if(map){map.setMapTypeId(b.dataset.maptype);saveUI({mapType:b.dataset.maptype})}$$('.map-controls button').forEach(x=>x.classList.toggle('active',x===b))});
-$$('.mobile-nav [data-view]').forEach(b=>b.onclick=()=>{$$('.mobile-nav [data-view]').forEach(x=>x.classList.toggle('active',x===b));currentView=b.dataset.view;saveUI();$('.workspace').classList.toggle('plan-view',currentView==='plan')});
+initBottomSheet();
 applyRestoredUI();render();initGoogle();

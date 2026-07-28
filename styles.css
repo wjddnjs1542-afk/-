@@ -17,3 +17,48 @@
 .flight-dialog{max-height:86vh;overflow:auto}
 .arrival-status{font-size:10px;margin-top:3px}.arrival-status.late{color:#dc2626}.arrival-status.safe{color:#059669}
 @media(max-width:700px){.flight-card{border-radius:14px}.place-time-row{grid-template-columns:1fr 1fr}.flight-dialog{max-height:82vh}}
+
+/* v0.6 mobile map + draggable schedule bottom sheet */
+.sheet-grabber{display:none}
+@media(max-width:700px){
+  :root{--mobile-header:58px;--sheet-peek:78px}
+  body{overflow:hidden;overscroll-behavior:none}
+  .workspace{height:calc(100% - var(--mobile-header));display:block;position:relative;overflow:hidden}
+  .map-pane{position:absolute;inset:0;display:block!important}
+  .planner-pane{
+    display:block!important;position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    border:0;background:var(--bg);border-radius:20px 20px 0 0;
+    box-shadow:0 -8px 28px rgba(17,24,39,.18);
+    transform:translateY(calc(100% - var(--sheet-peek)));
+    transition:transform .28s cubic-bezier(.22,.8,.25,1);
+    will-change:transform;overflow:hidden;touch-action:none
+  }
+  .planner-pane.dragging{transition:none}
+  .planner-pane[data-snap="collapsed"]{transform:translateY(calc(100% - var(--sheet-peek)))}
+  .planner-pane[data-snap="half"]{transform:translateY(44%)}
+  .planner-pane[data-snap="full"]{transform:translateY(0)}
+  .sheet-grabber{height:78px;display:block;background:#fff;border-bottom:1px solid var(--line);padding:8px 14px 10px;touch-action:none;user-select:none}
+  .grabber-bar{width:42px;height:5px;border-radius:99px;background:#cbd5e1;margin:0 auto 9px}
+  .sheet-peek-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .sheet-peek-row>div{min-width:0;display:flex;flex-direction:column}
+  .sheet-peek-row b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sheet-peek-row span{font-size:11px;color:var(--muted);margin-top:3px}
+  .sheet-expand-btn{width:36px;height:36px;border:0;border-radius:50%;background:var(--accent2);color:var(--accent);font-size:20px;font-weight:800}
+  .panel-scroll{height:calc(100% - 78px);overflow-y:auto;overflow-x:hidden;padding:10px;padding-bottom:calc(26px + env(safe-area-inset-bottom));overscroll-behavior:contain;touch-action:pan-y;display:flex;flex-direction:column}
+  .schedule-card{order:-4}
+  .route-card{order:-3}
+  .add-card{order:-2}
+  .trip-card{order:-1}
+  .flight-card{order:0}
+  .mobile-nav{display:none!important}
+  .workspace.plan-view .map-pane,.workspace.plan-view .planner-pane{display:block}
+  .map-controls{top:10px;left:10px}
+  .location-btn{bottom:calc(var(--sheet-peek) + 12px)}
+  .planner-pane[data-snap="half"]~* .location-btn,.planner-pane[data-snap="full"]~* .location-btn{display:none}
+  .top-actions .primary{max-width:154px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .schedule-card{padding:12px}
+  .day-tabs{position:sticky;top:0;z-index:3;background:#fff;padding-top:2px}
+  .stop{cursor:pointer;grid-template-columns:32px minmax(0,1fr) auto}
+  .stop:active{background:#f8fafc;transform:scale(.995)}
+  .stop-actions{position:relative;z-index:2}
+}

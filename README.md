@@ -1,17 +1,13 @@
-# TripFlow AI v0.5
+# TripFlow AI v0.6 — 모바일 지도·일정 바텀시트 UI
 
-추가 기능:
-- config.js에 API 키 1회 입력 후 자동 지도 연결
-- 마지막 DAY 복원
-- 마지막 지도/일정 화면 복원
-- 마지막 교통수단 복원
-- 마지막 지도 중심·확대·지도 종류 복원
+## 모바일 사용법
+- 처음 열면 지도를 넓게 보고 하단에 오늘 일정 바가 표시됩니다.
+- 하단 일정 바를 위로 밀면 지도 50% + 일정 50% 화면이 됩니다.
+- 한 번 더 위로 밀면 일정 전체 화면이 됩니다.
+- 아래로 밀면 반 화면, 지도 전체 화면으로 돌아갑니다.
+- 일정 장소 카드를 누르면 지도가 해당 장소로 이동하고 반 화면으로 전환됩니다.
+- 마지막 패널 상태, DAY, 교통수단, 지도 위치와 확대 수준이 저장됩니다.
 
-config.js의 다음 값을 실제 키로 바꾸세요.
-
-window.TRIPFLOW_CONFIG = {
-  GOOGLE_MAPS_API_KEY: "여기에_구글맵_API키를_입력하세요"
-};
-
-GitHub Pages 허용 주소 예:
-https://wjddnjs1542-afk.github.io/*
+## Google Maps API 키
+config.js의 GOOGLE_MAPS_API_KEY 값에 실제 키를 입력하세요.
+GitHub Pages 주소 제한을 반드시 적용하세요.
