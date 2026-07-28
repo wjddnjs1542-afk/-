@@ -198,7 +198,7 @@ function setSheetSnap(next,animate=true){
  if(!matchMedia('(max-width:700px)').matches)return;
  const sheet=$('#plannerSheet'),scroll=$('#panelScroll');if(!sheet)return;
  sheetSnap=next;sheet.dataset.snap=next;sheet.classList.toggle('dragging',!animate);
- if(next!=='full'&&scroll)scroll.scrollTop=0;
+ if(next==='collapsed'&&scroll)scroll.scrollTop=0;
  saveUI();updateSheetHint();
  setTimeout(()=>{if(map&&window.google)google.maps.event.trigger(map,'resize')},300);
 }
@@ -216,10 +216,8 @@ function initBottomSheet(){
  handle.addEventListener('pointermove',e=>move(e.clientY));handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
  toggle?.addEventListener('click',e=>{e.stopPropagation();setSheetSnap(sheetSnap==='collapsed'?'half':sheetSnap==='half'?'full':'half')});
  handle.addEventListener('dblclick',()=>setSheetSnap(sheetSnap==='full'?'collapsed':'full'));
- let touchStartY=0,panelDrag=false;
- scroll?.addEventListener('touchstart',e=>{touchStartY=e.touches[0].clientY;panelDrag=false},{passive:true});
- scroll?.addEventListener('touchmove',e=>{const y=e.touches[0].clientY,dy=y-touchStartY;if(sheetSnap!=='full'||(scroll.scrollTop<=0&&dy>8)){if(!panelDrag){panelDrag=true;begin(touchStartY)}move(y);e.preventDefault()}},{passive:false});
- scroll?.addEventListener('touchend',()=>{if(panelDrag)end()},{passive:true});
+ // 일정 본문은 패널 높이와 관계없이 독립적으로 스크롤합니다.
+ // 패널 높이 변경은 상단 손잡이 또는 펼침 버튼에서만 처리합니다.
  window.addEventListener('resize',()=>{sheet.style.transform='';sheet.dataset.snap=sheetSnap});
  updateSheetHint();
 }

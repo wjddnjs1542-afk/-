@@ -62,3 +62,16 @@
   .stop:active{background:#f8fafc;transform:scale(.995)}
   .stop-actions{position:relative;z-index:2}
 }
+
+
+/* v0.6.1: half-sheet schedule content scrolls independently */
+@media(max-width:700px){
+  #panelScroll{
+    touch-action:pan-y;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+  }
+  #sheetHandle{
+    touch-action:none;
+  }
+}
