@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
-<title>TripFlow AI · 시간 기반 여행 플래너</title>
+<title>TripFlow AI v0.7 · 여행 현장형 지도 플래너</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="app">
 <header class="topbar">
   <div>
-    <div class="brand">TripFlow <b>AI</b></div>
+    <div class="brand">TripFlow <b>AI</b> <small class="version">v0.7</small></div>
     <div class="subtitle">시간까지 고려하는 지도 기반 여행 일정 플래너</div>
   </div>
   <div class="top-actions">
@@ -68,7 +68,7 @@
 <section class="add-card">
   <div class="section-head compact"><div><h3>장소 추가</h3><p>장소와 희망 도착시간을 함께 입력합니다.</p></div></div>
   <div class="search-row">
-    <input id="placeSearch" autocomplete="off" placeholder="예: 리쓰린공원, 우동 맛집">
+    <input id="placeSearch" autocomplete="off" placeholder="예: JR Hotel Clement Takamatsu, 리쓰린공원">
     <button class="primary" id="addPlaceBtn">추가</button>
   </div>
   <div class="place-time-row">
@@ -141,8 +141,17 @@
 <label>장소명<input id="stopNameInput"></label>
 <div class="two-col"><label>종류<input id="stopTypeInput"></label><label>희망 도착시간<input type="time" id="stopTimeInput"></label></div>
 <label>체류시간(분)<input type="number" min="0" step="10" id="stopDurationInput"></label>
+<div class="two-col"><label>위도<input type="number" step="any" id="stopLatInput" placeholder="34.352..."></label><label>경도<input type="number" step="any" id="stopLngInput" placeholder="134.046..."></label></div>
+<div class="help-box">검색 위치가 잘못 찍혔을 때 Google Maps에서 확인한 위도·경도를 입력하면 마커 위치를 직접 보정할 수 있습니다.</div>
 <input type="hidden" id="stopIndexInput">
 <div class="dialog-actions"><button value="cancel" class="ghost">취소</button><button value="default" class="primary" id="saveStopBtn">저장</button></div>
+</form></dialog>
+
+
+<dialog id="placeDialog"><form method="dialog" class="dialog-card">
+<div class="dialog-head"><div><h2>검색 장소 선택</h2><p>주소와 지도를 확인한 뒤 정확한 장소를 선택하세요.</p></div><button value="cancel" class="icon-btn">✕</button></div>
+<div id="placeResults" class="place-results"></div>
+<div class="dialog-actions"><button value="cancel" class="ghost">취소</button></div>
 </form></dialog>
 
 <div id="toast"></div>

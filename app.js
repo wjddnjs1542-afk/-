@@ -33,6 +33,8 @@ function migrate(raw){
  (s.days||[]).forEach(d=>(d.stops||[]).forEach(x=>{if(x.time===undefined)x.time='';if(x.duration===undefined)x.duration=60}));
  return s;
 }
+const APP_VERSION="0.7";
+let pendingPlaces=[];
 let state=migrate(JSON.parse(localStorage.getItem('tripflow_state')||'null'));
 const savedUI=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
 let activeDay=Number.isInteger(savedUI.activeDay)?savedUI.activeDay:0,
@@ -103,7 +105,7 @@ function bindStops(){
  $$('#stopList .stop').forEach(el=>el.onclick=e=>{if(e.target.closest('[data-action]'))return;const s=state.days[activeDay].stops[+el.dataset.index];if(map&&s.lat){map.panTo({lat:s.lat,lng:s.lng});map.setZoom(16);setSheetSnap('half');toast(`${s.name} 위치를 지도에 표시했습니다.`)}});
  let from=null;$$('#stopList .stop').forEach(el=>{el.ondragstart=()=>{from=+el.dataset.index;el.classList.add('dragging')};el.ondragend=()=>el.classList.remove('dragging');el.ondragover=e=>e.preventDefault();el.ondrop=e=>{e.preventDefault();const to=+el.dataset.index;if(from===null||from===to)return;const a=state.days[activeDay].stops;a.splice(to,0,a.splice(from,1)[0]);save();clearRoutes();render()}})
 }
-function openStop(i){const s=state.days[activeDay].stops[i];$('#stopIndexInput').value=i;$('#stopNameInput').value=s.name;$('#stopTypeInput').value=s.type||'';$('#stopTimeInput').value=s.time||'';$('#stopDurationInput').value=s.duration??60;$('#stopDialog').showModal()}
+function openStop(i){const s=state.days[activeDay].stops[i];$('#stopIndexInput').value=i;$('#stopNameInput').value=s.name;$('#stopTypeInput').value=s.type||'';$('#stopTimeInput').value=s.time||'';$('#stopDurationInput').value=s.duration??60;$('#stopLatInput').value=s.lat??'';$('#stopLngInput').value=s.lng??'';$('#stopDialog').showModal()}
 function optimize(){
  const a=state.days[activeDay].stops;if(a.length<3)return toast('장소가 3개 이상일 때 스마트 동선을 사용할 수 있습니다.');
  const fixed=a.filter(x=>x.time).sort((x,y)=>minutes(x.time)-minutes(y.time)),flex=a.filter(x=>!x.time),out=[];let cur=null;
@@ -120,11 +122,30 @@ function optimize(){
  state.days[activeDay].stops=out;save();clearRoutes();render();
  const c=scheduleCheck(out);toast(c.late?`동선을 정리했지만 ${c.late}개 시간 충돌이 남았습니다.`:'시간과 거리를 고려해 동선을 정리했습니다.');
 }
-function addPlace(){
- const input=$('#placeSearch'),name=input.value.trim();if(!name)return;
- const p=autocomplete?.getPlace?.(),base={name,type:'검색 장소',duration:Number($('#placeDuration').value)||60,time:$('#placeTime').value||''};
- if(p?.geometry){const l=p.geometry.location;Object.assign(base,{name:p.name||name,lat:l.lat(),lng:l.lng(),placeId:p.place_id})}
- state.days[activeDay].stops.push(base);input.value='';$('#placeTime').value='';save();clearRoutes();render();toast('시간과 함께 일정에 추가했습니다.');
+async function addPlace(){
+ const input=$('#placeSearch'),query=input.value.trim();if(!query)return toast('검색할 장소명을 입력해 주세요.');
+ const selected=autocomplete?.getPlace?.();
+ if(selected?.geometry)return commitPlace(selected);
+ if(!map||!window.google?.maps?.places)return toast('Google Maps 연결 후 장소를 검색해 주세요.');
+ const service=new google.maps.places.PlacesService(map);
+ const center=map.getCenter()||new google.maps.LatLng(34.3428,134.0466);
+ const request={query:/高松|다카마쓰|Takamatsu/i.test(query)?query:`${query} Takamatsu Kagawa`,location:center,radius:50000,region:'jp'};
+ $('#addPlaceBtn').disabled=true;$('#addPlaceBtn').textContent='검색 중…';
+ service.textSearch(request,(results,status)=>{
+  $('#addPlaceBtn').disabled=false;$('#addPlaceBtn').textContent='추가';
+  if(status!==google.maps.places.PlacesServiceStatus.OK||!results?.length)return toast('검색 결과가 없습니다. 일본어·영문명으로 다시 검색해 주세요.');
+  pendingPlaces=results.slice(0,7);showPlaceResults(pendingPlaces);
+ });
+}
+function showPlaceResults(results){
+ $('#placeResults').innerHTML=results.map((p,i)=>{const loc=p.geometry?.location;return `<button type="button" class="place-result" data-place-index="${i}"><b>${esc(p.name)}</b><span>${esc(p.formatted_address||'주소 정보 없음')}</span><small>${p.rating?`★ ${p.rating} · `:''}${loc?`${loc.lat().toFixed(5)}, ${loc.lng().toFixed(5)}`:''}</small></button>`}).join('');
+ $$('.place-result').forEach(b=>b.onclick=()=>{commitPlace(pendingPlaces[+b.dataset.placeIndex]);$('#placeDialog').close()});
+ $('#placeDialog').showModal();
+}
+function commitPlace(p){
+ const loc=p.geometry?.location;if(!loc)return toast('이 장소의 좌표를 확인할 수 없습니다.');
+ const base={name:p.name||$('#placeSearch').value.trim(),type:'검색 장소',duration:Number($('#placeDuration').value)||60,time:$('#placeTime').value||'',lat:loc.lat(),lng:loc.lng(),placeId:p.place_id||'',address:p.formatted_address||''};
+ state.days[activeDay].stops.push(base);$('#placeSearch').value='';$('#placeTime').value='';save();clearRoutes();render();map?.panTo({lat:base.lat,lng:base.lng});map?.setZoom(16);toast('정확한 위치를 일정에 추가했습니다.');
 }
 function straightMetrics(){const s=state.days[activeDay].stops;let km=0;for(let i=1;i<s.length;i++)if(s[i-1].lat&&s[i].lat)km+=hav(s[i-1],s[i]);$('#distanceMetric').textContent=km?`약 ${km.toFixed(1)} km`:'—';$('#durationMetric').textContent='—'}
 function configuredGoogleKey(){
@@ -145,7 +166,8 @@ window.setupMap=()=>{
  const center=ui.mapCenter&&Number.isFinite(ui.mapCenter.lat)&&Number.isFinite(ui.mapCenter.lng)?ui.mapCenter:{lat:34.3428,lng:134.0466};
  map=new google.maps.Map($('#map'),{center,zoom:Number.isFinite(ui.mapZoom)?ui.mapZoom:13,mapTypeId:ui.mapType||'roadmap',gestureHandling:'greedy',fullscreenControl:false,streetViewControl:false,mapTypeControl:false});
  directionsService=new google.maps.DirectionsService();
- autocomplete=new google.maps.places.Autocomplete($('#placeSearch'),{fields:['place_id','geometry','name','formatted_address'],componentRestrictions:{country:'jp'}});
+ autocomplete=new google.maps.places.Autocomplete($('#placeSearch'),{fields:['place_id','geometry','name','formatted_address'],componentRestrictions:{country:'jp'},bounds:new google.maps.LatLngBounds({lat:33.95,lng:133.65},{lat:34.65,lng:134.45}),strictBounds:false});
+ autocomplete.addListener('place_changed',()=>{const p=autocomplete.getPlace();if(p?.geometry){const l=p.geometry.location;map.panTo(l);map.setZoom(16)}});
  refreshMarkers();
  $$('.map-controls button').forEach(b=>b.classList.toggle('active',b.dataset.maptype===map.getMapTypeId()));
  map.addListener('idle',()=>{
@@ -225,7 +247,7 @@ $('#apiBtn').onclick=()=>{$('#apiKeyInput').value=configuredGoogleKey();$('#apiD
 $('#saveApiBtn').onclick=e=>{e.preventDefault();const k=$('#apiKeyInput').value.trim();if(!k)return toast('API 키를 입력해 주세요.');localStorage.setItem('tripflow_google_key',k);location.reload()};
 $('#editTripBtn').onclick=()=>{const t=state.trip;$('#tripNameInput').value=t.name||'';$('#startDateInput').value=t.start||'';$('#endDateInput').value=t.end||'';$('#hotelInput').value=t.hotel||'';fillFlight('out',t.outbound);fillFlight('in',t.inbound);$('#tripDialog').showModal()};
 $('#saveTripBtn').onclick=e=>{e.preventDefault();state.trip={name:$('#tripNameInput').value,start:$('#startDateInput').value,end:$('#endDateInput').value,hotel:$('#hotelInput').value,outbound:readFlight('out'),inbound:readFlight('in')};save();$('#tripDialog').close();render();toast('여행과 항공편 정보를 저장했습니다.')};
-$('#saveStopBtn').onclick=e=>{e.preventDefault();const i=Number($('#stopIndexInput').value),s=state.days[activeDay].stops[i];Object.assign(s,{name:$('#stopNameInput').value,type:$('#stopTypeInput').value,time:$('#stopTimeInput').value,duration:Number($('#stopDurationInput').value)||0});save();$('#stopDialog').close();clearRoutes();render();toast('장소 시간을 수정했습니다.')};
+$('#saveStopBtn').onclick=e=>{e.preventDefault();const i=Number($('#stopIndexInput').value),s=state.days[activeDay].stops[i];const lat=Number($('#stopLatInput').value),lng=Number($('#stopLngInput').value);Object.assign(s,{name:$('#stopNameInput').value,type:$('#stopTypeInput').value,time:$('#stopTimeInput').value,duration:Number($('#stopDurationInput').value)||0,...(Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:{})});save();$('#stopDialog').close();clearRoutes();render();toast('장소 시간을 수정했습니다.')};
 $('#addPlaceBtn').onclick=addPlace;$('#placeSearch').onkeydown=e=>{if(e.key==='Enter')addPlace()};$('#addEmptyBtn').onclick=()=>$('#placeSearch').focus();
 $$('.quick-tags button').forEach(b=>b.onclick=()=>{$('#placeSearch').value=`다카마쓰 ${b.dataset.query}`;$('#placeSearch').focus()});
 $('#optimizeBtn').onclick=optimize;if($('#mobileOptimize'))$('#mobileOptimize').onclick=optimize;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;

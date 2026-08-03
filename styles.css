@@ -75,3 +75,8 @@
     touch-action:none;
   }
 }
+
+
+/* v0.7 accurate place search and field-use refinements */
+.version{font-size:10px;color:var(--muted);font-weight:700;margin-left:4px}.place-results{display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto}.place-result{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px}.place-result:hover,.place-result:focus{border-color:var(--accent);background:var(--accent2)}.place-result b,.place-result span,.place-result small{display:block}.place-result b{font-size:13px}.place-result span{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}.place-result small{font-size:10px;color:#64748b;margin-top:5px}.search-row button:disabled{opacity:.6;cursor:wait}
+@media(max-width:700px){.planner-pane[data-snap="half"]{transform:translateY(50%)}.panel-scroll{scroll-behavior:smooth}.place-results{max-height:62vh}.dialog-card{padding:16px}.two-col{gap:7px}}
