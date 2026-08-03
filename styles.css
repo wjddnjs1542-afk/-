@@ -96,3 +96,12 @@
 @media(max-width:390px){.ai-actions{gap:6px}.field-card{padding:12px}.weather-strip{grid-template-columns:34px 1fr}.weather-icon{font-size:23px}.top-actions #aiNowBtn{max-width:112px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 
 .location-basis{margin-top:8px;font-size:11px;color:#475569}.nearby-grid{display:grid;gap:8px;margin-top:10px}.nearby-item{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.nearby-item b{display:block;font-size:13px}.nearby-item span{display:block;font-size:11px;color:#64748b;margin-top:4px}.nearby-item button{margin-top:8px;width:100%;border:0;border-radius:9px;padding:8px;background:#eff6ff;color:#1d4ed8;font-weight:700}.nearby-item.primary-pick{border-color:#93c5fd;background:#f8fbff}
+/* v0.8.2 주변 추천 카테고리 */
+.recommend-category-tabs,.recommend-sub-tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.recommend-category-tabs::-webkit-scrollbar,.recommend-sub-tabs::-webkit-scrollbar{display:none}
+.recommend-category-tabs button,.recommend-sub-tabs button{flex:0 0 auto;border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:9px 13px;font-weight:700;white-space:nowrap}
+.recommend-category-tabs button.active{background:#111827;color:#fff;border-color:#111827}
+.recommend-sub-tabs button.active{background:#fff0f3;color:#d92d4f;border-color:#ffb7c5}
+.recommend-empty{padding:18px;border:1px dashed #d1d5db;border-radius:14px;text-align:center;color:#6b7280}
+.nearby-item button{min-height:42px}
+@media(max-width:700px){.recommend-category-tabs{margin-right:-12px;padding-right:12px}.recommend-sub-tabs{margin-right:-12px;padding-right:12px}.nearby-item button{width:100%;font-size:14px}}

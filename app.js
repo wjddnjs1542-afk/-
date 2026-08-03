@@ -33,7 +33,7 @@ function migrate(raw){
  (s.days||[]).forEach(d=>(d.stops||[]).forEach(x=>{if(x.time===undefined)x.time='';if(x.duration===undefined)x.duration=60;if(x.placeId===undefined)x.placeId='';if(x.openStatus===undefined)x.openStatus='unknown'}));
  return s;
 }
-const APP_VERSION="0.8.1";
+const APP_VERSION="0.8.2";
 let pendingPlaces=[];
 let state=migrate(JSON.parse(localStorage.getItem('tripflow_state')||'null'));
 const savedUI=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
@@ -122,21 +122,33 @@ function nearbySearch(request){
 }
 function placeOpenStatus(p){const v=p.opening_hours?.isOpen?.();return v===true?'영업 중':v===false?'영업 종료':'영업시간 미확인'}
 function timeCategory(){const h=new Date().getHours();if(h<10)return'아침';if(h<14)return'점심';if(h<17)return'오후';if(h<21)return'저녁';return'야간'}
+const RECOMMEND_CATEGORIES={
+ food:{label:'먹을거리',icon:'🍽️',subs:[
+  {key:'meal',label:'식사',type:'restaurant',keyword:'local restaurant family dining'},
+  {key:'cafe',label:'카페',type:'cafe',keyword:'cafe dessert'},
+  {key:'bar',label:'술집',type:'bar',keyword:'izakaya bar'}]},
+ play:{label:'놀거리',icon:'🎡',subs:[
+  {key:'indoor',label:'실내',type:'museum',keyword:'museum aquarium indoor attraction'},
+  {key:'outdoor',label:'실외',type:'tourist_attraction',keyword:'park garden sightseeing outdoor attraction'}]},
+ shopping:{label:'쇼핑',icon:'🛍️',subs:[
+  {key:'indoor_shop',label:'실내 쇼핑',type:'shopping_mall',keyword:'shopping mall department store'},
+  {key:'outdoor_shop',label:'거리·시장',type:'store',keyword:'shopping street market'},
+  {key:'souvenir',label:'기념품',type:'store',keyword:'souvenir gift local products'}]}
+};
+let lastRecommendationGroups=null;
 async function findNearbyRecommendations(){
- const rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
- const hour=new Date().getHours();
- const specs=[];
- if(hour>=6&&hour<=21){specs.push({kind:'먹을 곳',type:'restaurant',keyword:hour<11?'breakfast cafe':hour<15?'lunch local food':'dinner local food'});specs.push({kind:'카페',type:'cafe',keyword:'cafe dessert'});}
- if(rain)specs.push({kind:'실내에서 할 것',type:'museum',keyword:'museum indoor attraction'});
- else {specs.push({kind:'가볼 곳',type:'tourist_attraction',keyword:'attraction sightseeing'});specs.push({kind:'산책·휴식',type:'park',keyword:'park garden'});}
- const all=[];
- for(const spec of specs){
-  const rs=await nearbySearch({location:currentPosition,radius:2500,type:spec.type,keyword:spec.keyword,openNow:hour>=7&&hour<=22});
-  rs.slice(0,5).forEach(p=>{if(!p.geometry?.location)return;const loc=p.geometry.location;all.push({kind:spec.kind,name:p.name,placeId:p.place_id,lat:loc.lat(),lng:loc.lng(),rating:p.rating||0,ratingCount:p.user_ratings_total||0,open:placeOpenStatus(p),distance:hav(currentPosition,{lat:loc.lat(),lng:loc.lng()})})});
+ const hour=new Date().getHours(),groups={};
+ for(const [catKey,cat] of Object.entries(RECOMMEND_CATEGORIES)){
+  groups[catKey]={...cat,items:[]};
+  for(const spec of cat.subs){
+   const rs=await nearbySearch({location:currentPosition,radius:3000,type:spec.type,keyword:spec.keyword,openNow:hour>=7&&hour<=22});
+   rs.slice(0,6).forEach(p=>{if(!p.geometry?.location)return;const loc=p.geometry.location;groups[catKey].items.push({category:catKey,subKey:spec.key,kind:spec.label,name:p.name,placeId:p.place_id,lat:loc.lat(),lng:loc.lng(),rating:p.rating||0,ratingCount:p.user_ratings_total||0,open:placeOpenStatus(p),distance:hav(currentPosition,{lat:loc.lat(),lng:loc.lng()})})});
+  }
+  const unique=[...new Map(groups[catKey].items.map(x=>[x.placeId,x])).values()];
+  unique.sort((a,b)=>{const ao=a.open==='영업 중'?1:0,bo=b.open==='영업 중'?1:0;return bo-ao+(b.rating-a.rating)*.35+(a.distance-b.distance)*.55});
+  groups[catKey].items=unique.slice(0,12);
  }
- const unique=[...new Map(all.map(x=>[x.placeId,x])).values()];
- unique.sort((a,b)=>{const ao=a.open==='영업 중'?1:0,bo=b.open==='영업 중'?1:0;return bo-ao+(b.rating-a.rating)*.35+(a.distance-b.distance)*.45});
- return unique.slice(0,6);
+ return groups;
 }
 
 function nowMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
@@ -146,22 +158,51 @@ async function loadStopLiveInfo(s){
  if(!map||!s?.placeId||!window.google?.maps?.places)return s;
  return new Promise(resolve=>{new google.maps.places.PlacesService(map).getDetails({placeId:s.placeId,fields:['name','rating','user_ratings_total','opening_hours','formatted_phone_number','website']},(p,status)=>{if(status===google.maps.places.PlacesServiceStatus.OK&&p){s.rating=p.rating||s.rating;s.ratingCount=p.user_ratings_total||s.ratingCount;s.openStatus=p.opening_hours?.isOpen?.()===true?'open':p.opening_hours?.isOpen?.()===false?'closed':'unknown';s.weekdayText=p.opening_hours?.weekday_text||[];save()}resolve(s)})})
 }
+function recommendationCard(p,i){return `<div class="nearby-item ${i===0?'primary-pick':''}" data-sub="${esc(p.subKey)}"><b>${i===0?'추천 1순위 · ':''}${esc(p.name)}</b><span>${esc(p.kind)} · 약 ${p.distance<1?Math.round(p.distance*1000)+'m':p.distance.toFixed(1)+'km'} · ${esc(p.open)}${p.rating?` · ★${p.rating} (${p.ratingCount})`:''}</span><button type="button" data-rec-place="${esc(p.placeId)}">TripFlow 지도에서 길찾기</button></div>`}
+function renderRecommendationCategory(catKey,subKey='all'){
+ const box=$('#aiAnswer'),group=lastRecommendationGroups?.[catKey];if(!box||!group)return;
+ const items=subKey==='all'?group.items:group.items.filter(x=>x.subKey===subKey);
+ const results=box.querySelector('#recommendResults');if(!results)return;
+ results.innerHTML=items.length?items.slice(0,8).map(recommendationCard).join(''):'<div class="recommend-empty">이 조건의 주변 장소를 찾지 못했습니다.</div>';
+ box.querySelectorAll('[data-cat]').forEach(b=>b.classList.toggle('active',b.dataset.cat===catKey));
+ box.querySelectorAll('[data-sub]').forEach(b=>b.classList.toggle('active',b.dataset.sub===subKey));
+ box.querySelectorAll('[data-rec-place]').forEach(btn=>btn.onclick=()=>{const p=Object.values(lastRecommendationGroups).flatMap(g=>g.items).find(x=>x.placeId===btn.dataset.recPlace);if(!p)return;box.dataset.targetName=p.name;box.dataset.targetLat=p.lat;box.dataset.targetLng=p.lng;navigateRecommended()});
+}
+function renderRecommendationShell(groups){
+ const box=$('#aiAnswer'),rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
+ const summary=`${timeCategory()} 시간대 · ${rain?'비 가능성을 고려해 실내 장소를 우선 확인하세요':'실내·실외 장소를 함께 추천합니다'} · 내 위치 반경 약 3km`;
+ box.innerHTML=`<b>현재 위치 주변 추천</b><p>${esc(summary)}</p><div class="location-basis">📍 내 실시간 GPS 위치 기준</div><div class="recommend-category-tabs">${Object.entries(groups).map(([k,g])=>`<button type="button" data-cat="${k}">${g.icon} ${esc(g.label)}</button>`).join('')}</div><div class="recommend-sub-tabs"></div><div id="recommendResults" class="nearby-grid"></div>`;
+ function activate(catKey){const g=groups[catKey];box.querySelector('.recommend-sub-tabs').innerHTML=`<button type="button" data-sub="all">전체</button>${g.subs.map(x=>`<button type="button" data-sub="${x.key}">${esc(x.label)}</button>`).join('')}`;box.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>renderRecommendationCategory(catKey,b.dataset.sub));renderRecommendationCategory(catKey,'all')}
+ box.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>activate(b.dataset.cat));activate('food');
+}
 async function recommendNow(){
  const box=$('#aiAnswer');box.innerHTML='<b>내 현재 위치를 확인하고 있습니다…</b><p>GPS·날씨·시간·주변 영업정보를 함께 분석합니다.</p>';
  try{await ensureCurrentPosition(false)}catch(e){box.innerHTML=`<b>위치 권한이 필요합니다.</b><p>${esc(e.message)}</p>`;return}
  await refreshWeather(false);
  if(!map||!window.google?.maps?.places){box.innerHTML='<b>Google Maps 연결이 필요합니다.</b><p>주변 장소 추천을 위해 Places API가 연결되어야 합니다.</p>';return}
- const picks=await findNearbyRecommendations();
- if(!picks.length){box.innerHTML='<b>현재 위치 주변 추천을 찾지 못했습니다.</b><p>검색 반경을 바꾸거나 잠시 후 다시 시도해 주세요.</p>';return}
- const rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
- const summary=`${timeCategory()} 시간대 · ${rain?'비 가능성을 고려해 실내 장소를 우선':'야외 활동도 가능한 날씨'} · 반경 약 2.5km`;
- box.innerHTML=`<b>현재 위치 주변에서 바로 할 수 있는 선택입니다.</b><p>${esc(summary)}</p><div class="location-basis">📍 내 실시간 GPS 위치 기준</div><div class="nearby-grid">${picks.map((p,i)=>`<div class="nearby-item ${i===0?'primary-pick':''}"><b>${i===0?'추천 1순위 · ':''}${esc(p.name)}</b><span>${esc(p.kind)} · 약 ${p.distance<1?Math.round(p.distance*1000)+'m':p.distance.toFixed(1)+'km'} · ${esc(p.open)}${p.rating?` · ★${p.rating} (${p.ratingCount})`:''}</span><button type="button" data-rec-index="${i}">이곳으로 길찾기</button></div>`).join('')}</div>`;
- const first=picks[0];box.dataset.targetName=first.name;box.dataset.targetLat=first.lat;box.dataset.targetLng=first.lng;
- box.querySelectorAll('[data-rec-index]').forEach(btn=>btn.onclick=()=>{const p=picks[+btn.dataset.recIndex];box.dataset.targetName=p.name;box.dataset.targetLat=p.lat;box.dataset.targetLng=p.lng;navigateRecommended()});
+ const groups=await findNearbyRecommendations();lastRecommendationGroups=groups;
+ if(!Object.values(groups).some(g=>g.items.length)){box.innerHTML='<b>현재 위치 주변 추천을 찾지 못했습니다.</b><p>잠시 후 다시 시도해 주세요.</p>';return}
+ renderRecommendationShell(groups);
  if(map){map.panTo(currentPosition);map.setZoom(14)}
 }
 
-function navigateRecommended(){const box=$('#aiAnswer'),name=box.dataset.targetName||nextStopForNow()?.name;if(!name)return toast('안내할 다음 장소가 없습니다.');const mode={DRIVING:'driving',WALKING:'walking',TRANSIT:'transit'}[currentMode]||'transit';const origin=currentPosition?`${currentPosition.lat},${currentPosition.lng}`:'';window.open(`https://www.google.com/maps/dir/?api=1${origin?`&origin=${encodeURIComponent(origin)}`:''}&destination=${encodeURIComponent(name)}&travelmode=${mode}`,'_blank')}
+async function navigateRecommended(){
+ const box=$('#aiAnswer'),lat=Number(box.dataset.targetLat),lng=Number(box.dataset.targetLng),name=box.dataset.targetName;
+ if(!name||!Number.isFinite(lat)||!Number.isFinite(lng))return toast('먼저 추천 장소를 선택해 주세요.');
+ try{await ensureCurrentPosition(false)}catch(e){return toast(e.message||'현재 위치를 확인할 수 없습니다.')}
+ if(!map||!directionsService)return toast('Google Maps 연결이 필요합니다.');
+ clearRoutes();setSheetSnap('half');
+ $('#directionsPanel').innerHTML='<div class="directions-empty">현재 위치에서 추천 장소까지 경로를 계산하고 있습니다…</div>';
+ try{
+  const routed=await routeSegment(currentPosition,{lat,lng},currentMode,0),result=routed.result;
+  const renderer=new google.maps.DirectionsRenderer({map,suppressMarkers:false,preserveViewport:true,polylineOptions:{strokeColor:'#ff3b5c',strokeOpacity:.94,strokeWeight:6}});renderer.setDirections(result);routeRenderers.push(renderer);
+  const leg=result.routes[0].legs[0],fallback=routed.fallback?' · 대중교통 경로 없음 → 도보':'';
+  $('#distanceMetric').textContent=leg.distance?.text||'—';$('#durationMetric').textContent=leg.duration?.text||'—';
+  let html=`<div class="leg-card"><div class="leg-head"><b>내 위치 → ${esc(name)}${fallback}</b><span>${leg.distance?.text||''} · ${leg.duration?.text||''}</span></div><div class="step-list">`;
+  leg.steps.forEach(step=>{const main=step.transit?transitDetail(step):stripHtml(step.instructions||'이동');html+=`<div class="step"><span class="step-icon">${iconForStep(step,routed.actualMode)}</span><span>${main}</span><span class="step-distance">${step.distance?.text||''}</span></div>`});html+='</div></div>';
+  $('#directionsPanel').innerHTML=html;map.fitBounds(result.routes[0].bounds,55);toast('TripFlow 지도에 경로를 표시했습니다.');
+ }catch(e){$('#directionsPanel').innerHTML=`<div class="directions-empty">경로를 찾지 못했습니다. ${esc(e.message||'')}</div>`;toast('경로를 찾지 못했습니다.')}
+}
 
 function render(){
  updateHeader();
