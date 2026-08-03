@@ -88,12 +88,11 @@
 .weather-strip{display:grid;grid-template-columns:40px 1fr;gap:9px;align-items:center;background:#ffffff14;border:1px solid #ffffff20;border-radius:13px;padding:11px;margin-top:13px}.weather-icon{font-size:27px}.weather-strip b,.weather-strip span{display:block}.weather-strip b{font-size:13px}.weather-strip span{font-size:10px;color:#dbeafe;margin-top:3px;line-height:1.45}
 .ai-answer{background:#fff;color:#17202a;border-radius:13px;padding:13px;margin-top:10px}.ai-answer b{font-size:14px;line-height:1.45}.ai-answer p{font-size:11px;line-height:1.55;color:#64748b;margin:6px 0 0}.ai-answer .reason-list{display:grid;gap:5px;margin-top:9px}.ai-answer .reason{font-size:10px;background:#eff6ff;color:#1e40af;border-radius:8px;padding:7px 8px}.ai-answer .place-live{margin-top:9px;padding-top:9px;border-top:1px solid #e5e7eb;font-size:10px;color:#475569}
 .ai-actions{display:grid;grid-template-columns:1.2fr .8fr;gap:7px;margin-top:10px}.field-card .primary{background:#fff;color:#1d4ed8}.field-card .ghost{background:#ffffff10;border-color:#ffffff55;color:#fff}
-.mobile-ai-fab{display:none}
 .stop-live{display:inline-flex;margin-top:5px;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800}.stop-live.open{background:#dcfce7;color:#166534}.stop-live.closed{background:#fee2e2;color:#991b1b}.stop-live.unknown{background:#f1f5f9;color:#64748b}
 @media(max-width:700px){
  .field-card{border-radius:16px;padding:14px;margin-bottom:10px}.field-head h3{font-size:16px}.ai-actions{grid-template-columns:1fr}.weather-strip{margin-top:11px}
- .mobile-ai-fab{display:flex;position:fixed;right:13px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:80;border:0;border-radius:999px;background:#1d4ed8;color:#fff;box-shadow:0 12px 30px rgba(29,78,216,.38);padding:11px 14px;align-items:center;gap:7px;font-size:12px}.mobile-ai-fab span{font-size:16px}.mobile-ai-fab b{font-size:11px}
- .planner-pane[data-snap="collapsed"]~.mobile-ai-fab{display:flex}
  .top-actions #aiNowBtn{font-size:11px;padding:8px 9px}
 }
 @media(max-width:390px){.ai-actions{gap:6px}.field-card{padding:12px}.weather-strip{grid-template-columns:34px 1fr}.weather-icon{font-size:23px}.top-actions #aiNowBtn{max-width:112px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+
+.location-basis{margin-top:8px;font-size:11px;color:#475569}.nearby-grid{display:grid;gap:8px;margin-top:10px}.nearby-item{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.nearby-item b{display:block;font-size:13px}.nearby-item span{display:block;font-size:11px;color:#64748b;margin-top:4px}.nearby-item button{margin-top:8px;width:100%;border:0;border-radius:9px;padding:8px;background:#eff6ff;color:#1d4ed8;font-weight:700}.nearby-item.primary-pick{border-color:#93c5fd;background:#f8fbff}

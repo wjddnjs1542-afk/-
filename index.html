@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
-<title>TripFlow AI v0.8 · AI 현장 여행 도우미</title>
+<title>TripFlow AI v0.8.1 · 내 위치 기반 AI 현장 여행 도우미</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="app">
 <header class="topbar">
   <div>
-    <div class="brand">TripFlow <b>AI</b> <small class="version">v0.8</small></div>
+    <div class="brand">TripFlow <b>AI</b> <small class="version">v0.8.1</small></div>
     <div class="subtitle">시간까지 고려하는 지도 기반 여행 일정 플래너</div>
   </div>
   <div class="top-actions">
@@ -56,15 +56,15 @@
     <button class="refresh-mini" id="refreshFieldBtn" type="button">새로고침</button>
   </div>
   <div class="weather-strip" id="weatherStrip">
-    <div class="weather-icon">⛅</div><div><b>날씨 확인 전</b><span>현재 위치 또는 다카마쓰 기준으로 확인합니다.</span></div>
+    <div class="weather-icon">📍</div><div><b>내 위치 확인 전</b><span>위치 권한을 허용하면 현재 GPS 위치의 날씨를 확인합니다.</span></div>
   </div>
   <div class="ai-answer" id="aiAnswer">
-    <b>일정을 보면서 추천을 준비하고 있습니다.</b>
-    <p>현재 시간·위치·날씨·영업정보를 함께 고려합니다.</p>
+    <b>내 주변 추천을 준비하고 있습니다.</b>
+    <p>현재 GPS 위치·시간·날씨·영업정보를 함께 고려합니다.</p>
   </div>
   <div class="ai-actions">
     <button class="primary wide" id="aiRecommendBtn" type="button">✨ AI 지금 뭐하지?</button>
-    <button class="ghost wide" id="navigateNextBtn" type="button">다음 장소 길찾기</button>
+    <button class="ghost wide" id="navigateNextBtn" type="button">추천 장소 길찾기</button>
   </div>
 </section>
 <section class="trip-card">
@@ -172,7 +172,6 @@
 <div class="dialog-actions"><button value="cancel" class="ghost">취소</button></div>
 </form></dialog>
 
-<button class="mobile-ai-fab" id="mobileAiFab" type="button"><span>✨</span><b>지금 뭐하지?</b></button>
 <div id="toast"></div>
 <script src="config.js"></script>
 <script src="app.js"></script>

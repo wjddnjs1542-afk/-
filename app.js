@@ -33,7 +33,7 @@ function migrate(raw){
  (s.days||[]).forEach(d=>(d.stops||[]).forEach(x=>{if(x.time===undefined)x.time='';if(x.duration===undefined)x.duration=60;if(x.placeId===undefined)x.placeId='';if(x.openStatus===undefined)x.openStatus='unknown'}));
  return s;
 }
-const APP_VERSION="0.8";
+const APP_VERSION="0.8.1";
 let pendingPlaces=[];
 let state=migrate(JSON.parse(localStorage.getItem('tripflow_state')||'null'));
 const savedUI=JSON.parse(localStorage.getItem('tripflow_ui_state')||'{}');
@@ -89,12 +89,56 @@ function weatherCodeInfo(code){
  const table={0:['☀️','맑음'],1:['🌤️','대체로 맑음'],2:['⛅','구름 조금'],3:['☁️','흐림'],45:['🌫️','안개'],48:['🌫️','서리 안개'],51:['🌦️','약한 이슬비'],53:['🌦️','이슬비'],55:['🌧️','강한 이슬비'],61:['🌦️','약한 비'],63:['🌧️','비'],65:['🌧️','강한 비'],71:['🌨️','약한 눈'],73:['🌨️','눈'],75:['❄️','강한 눈'],80:['🌦️','소나기'],81:['🌧️','소나기'],82:['⛈️','강한 소나기'],95:['⛈️','뇌우']};
  return table[code]||['🌤️','날씨 정보'];
 }
-async function refreshWeather(showToast=false){
- const base=currentPosition||{lat:34.3428,lng:134.0466};
- const url=`https://api.open-meteo.com/v1/forecast?latitude=${base.lat}&longitude=${base.lng}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_days=2&timezone=auto`;
- try{const r=await fetch(url);if(!r.ok)throw new Error('weather');const w=await r.json();const c=w.current||{};let rain=null;if(w.hourly?.time){const idx=w.hourly.time.findIndex(x=>x.slice(0,13)===c.time?.slice(0,13));rain=idx>=0?w.hourly.precipitation_probability[idx]:null}currentWeather={temp:c.temperature_2m,feels:c.apparent_temperature,code:c.weather_code,rain,wind:c.wind_speed_10m,precip:c.precipitation};renderWeather();if(showToast)toast('현재 날씨를 새로 확인했습니다.')}catch(e){$('#weatherStrip').innerHTML='<div class="weather-icon">⚠️</div><div><b>날씨 연결 실패</b><span>인터넷 연결 후 다시 눌러 주세요.</span></div>'}
+function setLocationMarker(p,accuracy=0,centerMap=true){
+ currentPosition=p;
+ if(map){
+  if(locationMarker)locationMarker.setMap(null);if(accuracyCircle)accuracyCircle.setMap(null);
+  locationMarker=new google.maps.Marker({map,position:p,title:'내 현위치',zIndex:999,icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#2563eb',fillOpacity:1,strokeColor:'#fff',strokeWeight:4}});
+  if(accuracy>0)accuracyCircle=new google.maps.Circle({map,center:p,radius:accuracy,fillColor:'#2563eb',fillOpacity:.12,strokeColor:'#2563eb',strokeOpacity:.35,strokeWeight:1});
+  if(centerMap){map.panTo(p);map.setZoom(16)}
+ }
 }
-function renderWeather(){if(!currentWeather)return;const [icon,text]=weatherCodeInfo(currentWeather.code);const rain=currentWeather.rain==null?'강수확률 확인 중':`강수확률 ${currentWeather.rain}%`;$('#weatherStrip').innerHTML=`<div class="weather-icon">${icon}</div><div><b>${text} · ${Math.round(currentWeather.temp)}℃</b><span>체감 ${Math.round(currentWeather.feels)}℃ · ${rain} · 바람 ${Math.round(currentWeather.wind||0)}km/h</span></div>`}
+function ensureCurrentPosition(centerMap=false){
+ if(!navigator.geolocation)return Promise.reject(new Error('이 기기에서 위치정보를 지원하지 않습니다.'));
+ return new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(pos=>{
+  const p={lat:pos.coords.latitude,lng:pos.coords.longitude};setLocationMarker(p,pos.coords.accuracy,centerMap);resolve(p);
+ },()=>reject(new Error('위치 권한이 필요합니다. 브라우저 설정에서 위치 접근을 허용해 주세요.')),{enableHighAccuracy:true,timeout:15000,maximumAge:60000}));
+}
+async function refreshWeather(showToast=false){
+ try{
+  const base=await ensureCurrentPosition(false);
+  $('#weatherStrip').innerHTML='<div class="weather-icon">⏳</div><div><b>내 위치 날씨 확인 중</b><span>실시간 GPS 좌표를 기준으로 조회합니다.</span></div>';
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${base.lat}&longitude=${base.lng}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_days=2&timezone=auto`;
+  const r=await fetch(url);if(!r.ok)throw new Error('날씨 정보를 불러오지 못했습니다.');const w=await r.json();const c=w.current||{};let rain=null;if(w.hourly?.time){const idx=w.hourly.time.findIndex(x=>x.slice(0,13)===c.time?.slice(0,13));rain=idx>=0?w.hourly.precipitation_probability[idx]:null}
+  currentWeather={temp:c.temperature_2m,feels:c.apparent_temperature,code:c.weather_code,rain,wind:c.wind_speed_10m,precip:c.precipitation,lat:base.lat,lng:base.lng};renderWeather();if(showToast)toast('내 현재 위치의 날씨를 새로 확인했습니다.');
+ }catch(e){currentWeather=null;$('#weatherStrip').innerHTML=`<div class="weather-icon">📍</div><div><b>내 위치를 확인할 수 없습니다</b><span>${esc(e.message||'위치 권한을 확인해 주세요.')}</span></div>`;if(showToast)toast(e.message||'위치 권한을 확인해 주세요.')}
+}
+function renderWeather(){if(!currentWeather)return;const [icon,text]=weatherCodeInfo(currentWeather.code);const rain=currentWeather.rain==null?'강수확률 확인 중':`강수확률 ${currentWeather.rain}%`;$('#weatherStrip').innerHTML=`<div class="weather-icon">${icon}</div><div><b>${text} · ${Math.round(currentWeather.temp)}℃</b><span>내 실시간 위치 기준 · 체감 ${Math.round(currentWeather.feels)}℃ · ${rain} · 바람 ${Math.round(currentWeather.wind||0)}km/h</span></div>`}
+function nearbySearch(request){
+ return new Promise(resolve=>{
+  if(!map||!window.google?.maps?.places)return resolve([]);
+  new google.maps.places.PlacesService(map).nearbySearch(request,(results,status)=>resolve(status===google.maps.places.PlacesServiceStatus.OK?(results||[]):[]));
+ });
+}
+function placeOpenStatus(p){const v=p.opening_hours?.isOpen?.();return v===true?'영업 중':v===false?'영업 종료':'영업시간 미확인'}
+function timeCategory(){const h=new Date().getHours();if(h<10)return'아침';if(h<14)return'점심';if(h<17)return'오후';if(h<21)return'저녁';return'야간'}
+async function findNearbyRecommendations(){
+ const rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
+ const hour=new Date().getHours();
+ const specs=[];
+ if(hour>=6&&hour<=21){specs.push({kind:'먹을 곳',type:'restaurant',keyword:hour<11?'breakfast cafe':hour<15?'lunch local food':'dinner local food'});specs.push({kind:'카페',type:'cafe',keyword:'cafe dessert'});}
+ if(rain)specs.push({kind:'실내에서 할 것',type:'museum',keyword:'museum indoor attraction'});
+ else {specs.push({kind:'가볼 곳',type:'tourist_attraction',keyword:'attraction sightseeing'});specs.push({kind:'산책·휴식',type:'park',keyword:'park garden'});}
+ const all=[];
+ for(const spec of specs){
+  const rs=await nearbySearch({location:currentPosition,radius:2500,type:spec.type,keyword:spec.keyword,openNow:hour>=7&&hour<=22});
+  rs.slice(0,5).forEach(p=>{if(!p.geometry?.location)return;const loc=p.geometry.location;all.push({kind:spec.kind,name:p.name,placeId:p.place_id,lat:loc.lat(),lng:loc.lng(),rating:p.rating||0,ratingCount:p.user_ratings_total||0,open:placeOpenStatus(p),distance:hav(currentPosition,{lat:loc.lat(),lng:loc.lng()})})});
+ }
+ const unique=[...new Map(all.map(x=>[x.placeId,x])).values()];
+ unique.sort((a,b)=>{const ao=a.open==='영업 중'?1:0,bo=b.open==='영업 중'?1:0;return bo-ao+(b.rating-a.rating)*.35+(a.distance-b.distance)*.45});
+ return unique.slice(0,6);
+}
+
 function nowMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
 function nextStopForNow(){const stops=state.days[activeDay]?.stops||[];if(!stops.length)return null;const now=nowMinutes();return stops.find(s=>minutes(s.time)!==null&&minutes(s.time)>=now-30)||stops.find(s=>!s.completed)||stops.at(-1)}
 function openStatusLabel(s){if(s.openStatus==='open')return['영업 중','open'];if(s.openStatus==='closed')return['영업 종료','closed'];return['영업시간 미확인','unknown']}
@@ -103,17 +147,20 @@ async function loadStopLiveInfo(s){
  return new Promise(resolve=>{new google.maps.places.PlacesService(map).getDetails({placeId:s.placeId,fields:['name','rating','user_ratings_total','opening_hours','formatted_phone_number','website']},(p,status)=>{if(status===google.maps.places.PlacesServiceStatus.OK&&p){s.rating=p.rating||s.rating;s.ratingCount=p.user_ratings_total||s.ratingCount;s.openStatus=p.opening_hours?.isOpen?.()===true?'open':p.opening_hours?.isOpen?.()===false?'closed':'unknown';s.weekdayText=p.opening_hours?.weekday_text||[];save()}resolve(s)})})
 }
 async function recommendNow(){
- const box=$('#aiAnswer');box.innerHTML='<b>현재 상황을 분석하고 있습니다…</b><p>위치·날씨·시간·영업정보를 확인합니다.</p>';
- if(!currentWeather)await refreshWeather();let s=nextStopForNow();if(!s){box.innerHTML='<b>오늘 등록된 일정이 없습니다.</b><p>장소를 추가하면 현재 상황에 맞춰 추천합니다.</p>';return}
- await loadStopLiveInfo(s);let reasons=[];const now=nowMinutes(),target=minutes(s.time),rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
- if(target!==null){const gap=target-now;if(gap>0)reasons.push(`예정시간까지 약 ${Math.round(gap)}분 남았습니다.`);else reasons.push(`예정시간이 ${Math.abs(Math.round(gap))}분 지났습니다.`)}
- if(currentPosition&&s.lat)reasons.push(`현재 위치에서 직선거리 약 ${hav(currentPosition,s).toFixed(1)}km입니다.`);
- if(rain)reasons.push('비 가능성이 있어 이동과 실내 대안을 함께 확인하세요.');else reasons.push('현재는 야외 일정 진행에 비교적 무리가 적습니다.');
- const [status,statusClass]=openStatusLabel(s);if(s.openStatus==='closed'){const alt=(state.days[activeDay].stops||[]).find(x=>x!==s&&x.openStatus!=='closed');if(alt)s=alt;reasons.unshift('원래 다음 장소가 영업 종료로 확인되어 다른 일정을 우선 추천합니다.')}
- const rating=s.rating?` · 평점 ${s.rating}${s.ratingCount?` (${s.ratingCount})`:''}`:'';
- box.innerHTML=`<b>지금은 ‘${esc(s.name)}’로 이동하는 것이 좋습니다.</b><p>${esc(s.type||'다음 일정')} · 체류 ${s.duration||0}분${rating}</p><div class="reason-list">${reasons.slice(0,4).map(x=>`<div class="reason">✓ ${esc(x)}</div>`).join('')}</div><div class="place-live">${statusClass==='unknown'?'영업정보는 장소검색으로 등록한 일정에서 확인됩니다.':`현재 상태: ${status}`}</div>`;
- box.dataset.targetName=s.name;box.dataset.targetLat=s.lat||'';box.dataset.targetLng=s.lng||'';if(map&&s.lat){map.panTo({lat:s.lat,lng:s.lng});map.setZoom(15)}
+ const box=$('#aiAnswer');box.innerHTML='<b>내 현재 위치를 확인하고 있습니다…</b><p>GPS·날씨·시간·주변 영업정보를 함께 분석합니다.</p>';
+ try{await ensureCurrentPosition(false)}catch(e){box.innerHTML=`<b>위치 권한이 필요합니다.</b><p>${esc(e.message)}</p>`;return}
+ await refreshWeather(false);
+ if(!map||!window.google?.maps?.places){box.innerHTML='<b>Google Maps 연결이 필요합니다.</b><p>주변 장소 추천을 위해 Places API가 연결되어야 합니다.</p>';return}
+ const picks=await findNearbyRecommendations();
+ if(!picks.length){box.innerHTML='<b>현재 위치 주변 추천을 찾지 못했습니다.</b><p>검색 반경을 바꾸거나 잠시 후 다시 시도해 주세요.</p>';return}
+ const rain=(currentWeather?.rain||0)>=50||(currentWeather?.precip||0)>0;
+ const summary=`${timeCategory()} 시간대 · ${rain?'비 가능성을 고려해 실내 장소를 우선':'야외 활동도 가능한 날씨'} · 반경 약 2.5km`;
+ box.innerHTML=`<b>현재 위치 주변에서 바로 할 수 있는 선택입니다.</b><p>${esc(summary)}</p><div class="location-basis">📍 내 실시간 GPS 위치 기준</div><div class="nearby-grid">${picks.map((p,i)=>`<div class="nearby-item ${i===0?'primary-pick':''}"><b>${i===0?'추천 1순위 · ':''}${esc(p.name)}</b><span>${esc(p.kind)} · 약 ${p.distance<1?Math.round(p.distance*1000)+'m':p.distance.toFixed(1)+'km'} · ${esc(p.open)}${p.rating?` · ★${p.rating} (${p.ratingCount})`:''}</span><button type="button" data-rec-index="${i}">이곳으로 길찾기</button></div>`).join('')}</div>`;
+ const first=picks[0];box.dataset.targetName=first.name;box.dataset.targetLat=first.lat;box.dataset.targetLng=first.lng;
+ box.querySelectorAll('[data-rec-index]').forEach(btn=>btn.onclick=()=>{const p=picks[+btn.dataset.recIndex];box.dataset.targetName=p.name;box.dataset.targetLat=p.lat;box.dataset.targetLng=p.lng;navigateRecommended()});
+ if(map){map.panTo(currentPosition);map.setZoom(14)}
 }
+
 function navigateRecommended(){const box=$('#aiAnswer'),name=box.dataset.targetName||nextStopForNow()?.name;if(!name)return toast('안내할 다음 장소가 없습니다.');const mode={DRIVING:'driving',WALKING:'walking',TRANSIT:'transit'}[currentMode]||'transit';const origin=currentPosition?`${currentPosition.lat},${currentPosition.lng}`:'';window.open(`https://www.google.com/maps/dir/?api=1${origin?`&origin=${encodeURIComponent(origin)}`:''}&destination=${encodeURIComponent(name)}&travelmode=${mode}`,'_blank')}
 
 function render(){
@@ -237,7 +284,7 @@ async function drawRoute(){
  }catch(e){html+=`<div class="leg-card"><div class="leg-head"><b>${i+1}. ${esc(stops[i].name)} → ${i+2}. ${esc(stops[i+1].name)}</b><span>경로 없음</span></div><div class="step-list"><div class="step"><span>⚠️</span><span>${esc(e.message)}</span><span></span></div></div></div>`}}
  $('#directionsPanel').innerHTML=html;$('#distanceMetric').textContent=success?`${(totalDist/1000).toFixed(1)} km`:'—';$('#durationMetric').textContent=success?`${Math.round(totalDur/60)}분`:'—';if(success)map.fitBounds(bounds,55);
 }
-function locateMe(){if(!map)return toast('먼저 Google Maps를 연결해 주세요.');navigator.geolocation.getCurrentPosition(pos=>{const p={lat:pos.coords.latitude,lng:pos.coords.longitude};currentPosition=p;if(locationMarker)locationMarker.setMap(null);if(accuracyCircle)accuracyCircle.setMap(null);locationMarker=new google.maps.Marker({map,position:p,title:'내 현위치',zIndex:999,icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#2563eb',fillOpacity:1,strokeColor:'#fff',strokeWeight:4}});accuracyCircle=new google.maps.Circle({map,center:p,radius:pos.coords.accuracy,fillColor:'#2563eb',fillOpacity:.12,strokeColor:'#2563eb',strokeOpacity:.35,strokeWeight:1});map.panTo(p);map.setZoom(16);refreshWeather();toast('현위치를 표시했습니다.')},()=>toast('위치 권한 또는 위치정보를 확인해 주세요.'),{enableHighAccuracy:true,timeout:12000})}
+async function locateMe(){try{await ensureCurrentPosition(true);await refreshWeather(false);toast('내 실시간 위치와 날씨를 갱신했습니다.')}catch(e){toast(e.message||'위치 권한 또는 위치정보를 확인해 주세요.')}}
 function openGoogle(){const s=state.days[activeDay].stops;if(s.length<2)return;const modes={DRIVING:'driving',WALKING:'walking',TRANSIT:'transit'},way=currentMode==='TRANSIT'?'':`&waypoints=${encodeURIComponent(s.slice(1,-1).map(x=>x.name).join('|'))}`;window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(s[0].name)}&destination=${encodeURIComponent(s.at(-1).name)}${way}&travelmode=${modes[currentMode]}`,'_blank')}
 function fillFlight(prefix,f){$(`#${prefix}Airline`).value=f?.airline||'';$(`#${prefix}FlightNo`).value=f?.flightNo||'';$(`#${prefix}Aircraft`).value=f?.aircraft||'';$(`#${prefix}DepAirport`).value=f?.depAirport||'';$(`#${prefix}ArrAirport`).value=f?.arrAirport||'';$(`#${prefix}DepTime`).value=f?.depTime||'';$(`#${prefix}ArrTime`).value=f?.arrTime||''}
 function readFlight(prefix){return{airline:$(`#${prefix}Airline`).value,flightNo:$(`#${prefix}FlightNo`).value,aircraft:$(`#${prefix}Aircraft`).value,depAirport:$(`#${prefix}DepAirport`).value,arrAirport:$(`#${prefix}ArrAirport`).value,depTime:$(`#${prefix}DepTime`).value,arrTime:$(`#${prefix}ArrTime`).value}}
@@ -282,7 +329,7 @@ $('#saveTripBtn').onclick=e=>{e.preventDefault();state.trip={name:$('#tripNameIn
 $('#saveStopBtn').onclick=e=>{e.preventDefault();const i=Number($('#stopIndexInput').value),s=state.days[activeDay].stops[i];const lat=Number($('#stopLatInput').value),lng=Number($('#stopLngInput').value);Object.assign(s,{name:$('#stopNameInput').value,type:$('#stopTypeInput').value,time:$('#stopTimeInput').value,duration:Number($('#stopDurationInput').value)||0,...(Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:{})});save();$('#stopDialog').close();clearRoutes();render();toast('장소 시간을 수정했습니다.')};
 $('#addPlaceBtn').onclick=addPlace;$('#placeSearch').onkeydown=e=>{if(e.key==='Enter')addPlace()};$('#addEmptyBtn').onclick=()=>$('#placeSearch').focus();
 $$('.quick-tags button').forEach(b=>b.onclick=()=>{$('#placeSearch').value=`다카마쓰 ${b.dataset.query}`;$('#placeSearch').focus()});
-$('#aiNowBtn').onclick=recommendNow;$('#aiRecommendBtn').onclick=recommendNow;$('#mobileAiFab').onclick=()=>{setSheetSnap('half');setTimeout(recommendNow,180)};$('#refreshFieldBtn').onclick=()=>refreshWeather(true);$('#navigateNextBtn').onclick=navigateRecommended;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;
+$('#aiNowBtn').onclick=()=>{setSheetSnap('half');setTimeout(recommendNow,120)};$('#aiRecommendBtn').onclick=recommendNow;$('#refreshFieldBtn').onclick=()=>refreshWeather(true);$('#navigateNextBtn').onclick=navigateRecommended;$('#routeBtn').onclick=drawRoute;$('#openGoogleBtn').onclick=openGoogle;$('#locationBtn').onclick=locateMe;
 $$('.mode-tabs button').forEach(b=>b.onclick=()=>{currentMode=b.dataset.mode;saveUI();$$('.mode-tabs button').forEach(x=>x.classList.toggle('active',x===b));clearRoutes();straightMetrics();render()});
 $$('.map-controls button').forEach(b=>b.onclick=()=>{if(map){map.setMapTypeId(b.dataset.maptype);saveUI({mapType:b.dataset.maptype})}$$('.map-controls button').forEach(x=>x.classList.toggle('active',x===b))});
 initBottomSheet();
